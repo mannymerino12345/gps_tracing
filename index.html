@@ -37,28 +37,54 @@
             width: 370px;
             max-width: calc(100vw - 24px);
             max-height: calc(100vh - 24px);
-            overflow-y: auto;
             background: rgba(255, 255, 255, 0.97);
             border-radius: 14px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-            padding: 14px;
+            overflow: hidden;
         }
 
-        .panel h2 {
-            margin: 0 0 10px;
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 14px;
+            background: rgba(255,255,255,0.98);
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .panel-title-wrap h2 {
+            margin: 0;
             font-size: 18px;
         }
 
-        .panel h3 {
-            margin: 16px 0 10px;
-            font-size: 15px;
+        .panel-title-wrap p {
+            margin: 6px 0 0;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #4b5563;
         }
 
-        .panel p {
-            margin: 0 0 12px;
+        .toggle-btn {
+            border: none;
+            background: #111827;
+            color: white;
+            border-radius: 10px;
+            padding: 10px 12px;
+            cursor: pointer;
             font-size: 13px;
-            line-height: 1.5;
-            color: #333;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .panel-body {
+            padding: 14px;
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+
+        .panel.collapsed .panel-body {
+            display: none;
         }
 
         .btn-group {
@@ -229,10 +255,30 @@
 
         @media (max-width: 640px) {
             .panel {
-                width: calc(100vw - 20px);
-                left: 10px;
                 top: 10px;
+                left: 10px;
+                right: 10px;
+                width: auto;
+                max-width: none;
+                max-height: calc(100vh - 20px);
+                border-radius: 16px;
+            }
+
+            .panel-header {
                 padding: 12px;
+            }
+
+            .panel-title-wrap h2 {
+                font-size: 16px;
+            }
+
+            .panel-title-wrap p {
+                font-size: 11px;
+            }
+
+            .panel-body {
+                padding: 12px;
+                max-height: calc(100vh - 100px);
             }
 
             .btn-group {
@@ -242,54 +288,64 @@
             .btn-full {
                 grid-column: auto;
             }
+
+            .history-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+            }
         }
     </style>
 </head>
 <body>
 
-    <div class="panel">
-        <h2>GPS Path Accuracy Test</h2>
-        <p>
-            Blue line = imong existing GeoJSON path<br>
-            Red line = current live GPS recorded path<br>
-            Orange line = selected history record
-        </p>
-
-        <div class="btn-group">
-            <button class="btn-locate btn-full" onclick="locateUser()">Locate Me First</button>
-            <button class="btn-start" onclick="startRecording()">Start Recording</button>
-            <button class="btn-stop" onclick="stopRecording()">Stop Recording</button>
-            <button class="btn-clear" onclick="clearCurrentTrail()">Clear Current Trail</button>
-            <button class="btn-download btn-full" onclick="downloadCurrentRecordedGeoJSON()">Download Current GPS GeoJSON</button>
-        </div>
-
-        <div class="info-box">
-            <div><strong>Status:</strong> <span id="status" class="status-warning">Idle</span></div>
-            <div><strong>GPS Accuracy:</strong> <span id="accuracy">-</span></div>
-            <div><strong>Recorded Points:</strong> <span id="pointsCount">0</span></div>
-            <div><strong>Last Distance:</strong> <span id="lastDistance">-</span></div>
-        </div>
-
-        <div class="legend">
-            <div class="legend-item">
-                <span class="line-preview line-blue"></span>
-                <span>GeoJSON Path</span>
+    <div class="panel" id="panel">
+        <div class="panel-header">
+            <div class="panel-title-wrap">
+                <h2>GPS Path Accuracy Test</h2>
+                <p>
+                    Blue = GeoJSON path, Red = live GPS, Orange = history preview
+                </p>
             </div>
-            <div class="legend-item">
-                <span class="line-preview line-red"></span>
-                <span>Live GPS Trail</span>
-            </div>
-            <div class="legend-item">
-                <span class="line-preview line-orange"></span>
-                <span>History Record Preview</span>
-            </div>
+            <button class="toggle-btn" id="togglePanelBtn" onclick="togglePanel()">Hide</button>
         </div>
 
-        <h3>Record History</h3>
-        <div class="top-note">
-            Auto-save ni siya sa browser after stop recording. Pero i-download gihapon ang important nga records.
+        <div class="panel-body" id="panelBody">
+            <div class="btn-group">
+                <button class="btn-locate btn-full" onclick="locateUser()">Locate Me First</button>
+                <button class="btn-start" onclick="startRecording()">Start Recording</button>
+                <button class="btn-stop" onclick="stopRecording()">Stop Recording</button>
+                <button class="btn-clear" onclick="clearCurrentTrail()">Clear Current Trail</button>
+                <button class="btn-download btn-full" onclick="downloadCurrentRecordedGeoJSON()">Download Current GPS GeoJSON</button>
+            </div>
+
+            <div class="info-box">
+                <div><strong>Status:</strong> <span id="status" class="status-warning">Idle</span></div>
+                <div><strong>GPS Accuracy:</strong> <span id="accuracy">-</span></div>
+                <div><strong>Recorded Points:</strong> <span id="pointsCount">0</span></div>
+                <div><strong>Last Distance:</strong> <span id="lastDistance">-</span></div>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <span class="line-preview line-blue"></span>
+                    <span>GeoJSON Path</span>
+                </div>
+                <div class="legend-item">
+                    <span class="line-preview line-red"></span>
+                    <span>Live GPS Trail</span>
+                </div>
+                <div class="legend-item">
+                    <span class="line-preview line-orange"></span>
+                    <span>History Record Preview</span>
+                </div>
+            </div>
+
+            <h3>Record History</h3>
+            <div class="top-note">
+                Auto-save ni siya sa browser after stop recording. I-download gihapon ang important nga records.
+            </div>
+            <div id="historyList" class="history-list"></div>
         </div>
-        <div id="historyList" class="history-list"></div>
     </div>
 
     <div id="map"></div>
@@ -328,6 +384,14 @@
             weight: 5,
             opacity: 0.9
         }).addTo(map);
+
+        function togglePanel() {
+            const panel = document.getElementById('panel');
+            const btn = document.getElementById('togglePanelBtn');
+
+            panel.classList.toggle('collapsed');
+            btn.textContent = panel.classList.contains('collapsed') ? 'Show' : 'Hide';
+        }
 
         function setStatus(text, type = 'warning') {
             const statusEl = document.getElementById('status');
@@ -392,10 +456,7 @@
                 setStatus('Failed to load GeoJSON', 'error');
                 alert(
                     'Wala na-load ang campus_paths.geojson.\n\n' +
-                    'Siguroa nga:\n' +
-                    '1. same folder ang index.html ug campus_paths.geojson\n' +
-                    '2. sakto ang filename\n' +
-                    '3. valid ang GeoJSON file'
+                    'Siguroa nga same folder ang index.html ug campus_paths.geojson ug sakto ang filename.'
                 );
             }
         }
@@ -497,7 +558,6 @@
             }
 
             clearHistoryPreview();
-
             isRecording = true;
             setStatus('Waiting for GPS...', 'warning');
 
@@ -805,10 +865,6 @@
             records[recordIndex].name = trimmed;
             saveHistoryRecords(records);
             renderHistory();
-
-            if (historyPreviewLayer) {
-                setStatus(`Renamed to: ${trimmed}`, 'good');
-            }
         }
 
         function downloadHistoryRecord(recordId) {
