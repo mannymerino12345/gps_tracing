@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GPS Path Accuracy Test with History</title>
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin=""
+    />
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+        }
+
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+
+        .panel {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 1000;
+            width: 370px;
+            max-width: calc(100vw - 24px);
+            max-height: calc(100vh - 24px);
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.97);
+            border-radius: 14px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+            padding: 14px;
+        }
+
+        .panel h2 {
+            margin: 0 0 10px;
+            font-size: 18px;
+        }
+
+        .panel h3 {
+            margin: 16px 0 10px;
+            font-size: 15px;
+        }
+
+        .panel p {
+            margin: 0 0 12px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #333;
+        }
+
+        .btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .btn-full {
+            grid-column: 1 / -1;
+        }
+
+        button {
+            border: none;
+            border-radius: 10px;
+            padding: 10px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .btn-locate {
+            background: #7c3aed;
+            color: white;
+        }
+
+        .btn-start {
+            background: #16a34a;
+            color: white;
+        }
+
+        .btn-stop {
+            background: #dc2626;
+            color: white;
+        }
+
+        .btn-clear {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-download {
+            background: #111827;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #111827;
+            padding: 7px 10px;
+            font-size: 12px;
+            border-radius: 8px;
+        }
+
+        .btn-danger-small {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 7px 10px;
+            font-size: 12px;
+            border-radius: 8px;
+        }
+
+        .info-box {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            background: #f3f4f6;
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .legend {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+            font-size: 13px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .line-preview {
+            width: 24px;
+            height: 0;
+            border-top-width: 4px;
+            border-top-style: solid;
+            margin-right: 8px;
+        }
+
+        .line-blue {
+            border-top-color: blue;
+        }
+
+        .line-red {
+            border-top-color: red;
+        }
+
+        .line-orange {
+            border-top-color: orange;
+        }
+
+        .status-good {
+            color: #166534;
+            font-weight: bold;
+        }
+
+        .status-warning {
+            color: #b45309;
+            font-weight: bold;
+        }
+
+        .status-error {
+            color: #b91c1c;
+            font-weight: bold;
+        }
+
+        .history-list {
+            margin-top: 10px;
+        }
+
+        .history-empty {
+            font-size: 13px;
+            color: #6b7280;
+            background: #f9fafb;
+            border: 1px dashed #d1d5db;
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        .history-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #fafafa;
+        }
+
+        .history-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 4px;
+            word-break: break-word;
+        }
+
+        .history-meta {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        .history-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .top-note {
+            font-size: 12px;
+            color: #4b5563;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 640px) {
+            .panel {
+                width: calc(100vw - 20px);
+                left: 10px;
+                top: 10px;
+                padding: 12px;
+            }
+
+            .btn-group {
+                grid-template-columns: 1fr;
+            }
+
+            .btn-full {
+                grid-column: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        <h2>GPS Path Accuracy Test</h2>
+        <p>
+            Blue line = imong existing GeoJSON path<br>
+            Red line = current live GPS recorded path<br>
+            Orange line = selected history record
+        </p>
+
+        <div class="btn-group">
+            <button class="btn-locate btn-full" onclick="locateUser()">Locate Me First</button>
+            <button class="btn-start" onclick="startRecording()">Start Recording</button>
+            <button class="btn-stop" onclick="stopRecording()">Stop Recording</button>
+            <button class="btn-clear" onclick="clearCurrentTrail()">Clear Current Trail</button>
+            <button class="btn-download btn-full" onclick="downloadCurrentRecordedGeoJSON()">Download Current GPS GeoJSON</button>
+        </div>
+
+        <div class="info-box">
+            <div><strong>Status:</strong> <span id="status" class="status-warning">Idle</span></div>
+            <div><strong>GPS Accuracy:</strong> <span id="accuracy">-</span></div>
+            <div><strong>Recorded Points:</strong> <span id="pointsCount">0</span></div>
+            <div><strong>Last Distance:</strong> <span id="lastDistance">-</span></div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <span class="line-preview line-blue"></span>
+                <span>GeoJSON Path</span>
+            </div>
+            <div class="legend-item">
+                <span class="line-preview line-red"></span>
+                <span>Live GPS Trail</span>
+            </div>
+            <div class="legend-item">
+                <span class="line-preview line-orange"></span>
+                <span>History Record Preview</span>
+            </div>
+        </div>
+
+        <h3>Record History</h3>
+        <div class="top-note">
+            Auto-save ni siya sa browser after stop recording. Pero i-download gihapon ang important nga records.
+        </div>
+        <div id="historyList" class="history-list"></div>
+    </div>
+
+    <div id="map"></div>
+
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""
+    ></script>
+
+    <script>
+        const DEFAULT_CENTER = [10.3745, 124.9805];
+        const DEFAULT_ZOOM = 18;
+        const STORAGE_KEY = 'gps_record_history_v1';
+
+        const map = L.map('map', {
+            zoomControl: true
+        }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 22,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        let geojsonLayer = null;
+        let recordedLatLngs = [];
+        let gpsWatchId = null;
+        let isRecording = false;
+
+        let locationMarker = null;
+        let accuracyCircle = null;
+        let historyPreviewLayer = null;
+
+        const gpsTrail = L.polyline([], {
+            color: 'red',
+            weight: 5,
+            opacity: 0.9
+        }).addTo(map);
+
+        function setStatus(text, type = 'warning') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = text;
+            statusEl.className = '';
+
+            if (type === 'good') statusEl.classList.add('status-good');
+            if (type === 'warning') statusEl.classList.add('status-warning');
+            if (type === 'error') statusEl.classList.add('status-error');
+        }
+
+        function updateAccuracy(value) {
+            document.getElementById('accuracy').textContent =
+                value == null ? '-' : `${value.toFixed(2)} meters`;
+        }
+
+        function updatePointCount() {
+            document.getElementById('pointsCount').textContent = recordedLatLngs.length;
+        }
+
+        function updateLastDistance(value) {
+            document.getElementById('lastDistance').textContent =
+                value == null ? '-' : `${value.toFixed(2)} meters`;
+        }
+
+        async function loadGeoJSON() {
+            try {
+                const response = await fetch('./campus_paths.geojson');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} - Could not load campus_paths.geojson`);
+                }
+
+                const geojson = await response.json();
+
+                geojsonLayer = L.geoJSON(geojson, {
+                    style: function () {
+                        return {
+                            color: 'blue',
+                            weight: 4,
+                            opacity: 0.95
+                        };
+                    },
+                    pointToLayer: function (feature, latlng) {
+                        return L.circleMarker(latlng, {
+                            radius: 5,
+                            color: 'blue',
+                            fillColor: 'blue',
+                            fillOpacity: 1
+                        });
+                    }
+                }).addTo(map);
+
+                const bounds = geojsonLayer.getBounds();
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [30, 30] });
+                }
+
+                setStatus('GeoJSON loaded', 'good');
+            } catch (error) {
+                console.error(error);
+                setStatus('Failed to load GeoJSON', 'error');
+                alert(
+                    'Wala na-load ang campus_paths.geojson.\n\n' +
+                    'Siguroa nga:\n' +
+                    '1. same folder ang index.html ug campus_paths.geojson\n' +
+                    '2. sakto ang filename\n' +
+                    '3. valid ang GeoJSON file'
+                );
+            }
+        }
+
+        function updateLocationVisual(latlng, accuracy) {
+            if (locationMarker) {
+                locationMarker.setLatLng(latlng);
+            } else {
+                locationMarker = L.circleMarker(latlng, {
+                    radius: 7,
+                    color: 'red',
+                    fillColor: 'red',
+                    fillOpacity: 1,
+                    weight: 2
+                }).addTo(map);
+            }
+
+            if (accuracyCircle) {
+                accuracyCircle.setLatLng(latlng);
+                accuracyCircle.setRadius(accuracy);
+            } else {
+                accuracyCircle = L.circle(latlng, {
+                    radius: accuracy,
+                    color: 'red',
+                    fillColor: 'red',
+                    fillOpacity: 0.12,
+                    weight: 1
+                }).addTo(map);
+            }
+        }
+
+        function locateUser() {
+            if (!navigator.geolocation) {
+                setStatus('Geolocation not supported', 'error');
+                alert('This device/browser does not support Geolocation.');
+                return;
+            }
+
+            setStatus('Getting current location...', 'warning');
+
+            navigator.geolocation.getCurrentPosition(
+                function (position) {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+                    const latlng = L.latLng(lat, lng);
+
+                    updateLocationVisual(latlng, accuracy);
+                    updateAccuracy(accuracy);
+                    updateLastDistance(null);
+
+                    map.setView(latlng, 19);
+
+                    if (accuracy <= 10) {
+                        setStatus('Location locked (high accuracy)', 'good');
+                    } else if (accuracy <= 20) {
+                        setStatus('Location locked (medium accuracy)', 'warning');
+                    } else {
+                        setStatus('Low accuracy, try open area', 'error');
+                    }
+                },
+                function (error) {
+                    console.error(error);
+                    let message = 'Unknown location error';
+
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            message = 'Location permission denied';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            message = 'Position unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            message = 'Location request timeout';
+                            break;
+                    }
+
+                    setStatus(message, 'error');
+                    alert(message);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        function startRecording() {
+            if (!navigator.geolocation) {
+                setStatus('Geolocation not supported', 'error');
+                alert('This device/browser does not support Geolocation.');
+                return;
+            }
+
+            if (gpsWatchId !== null) {
+                setStatus('Already recording', 'warning');
+                return;
+            }
+
+            clearHistoryPreview();
+
+            isRecording = true;
+            setStatus('Waiting for GPS...', 'warning');
+
+            gpsWatchId = navigator.geolocation.watchPosition(
+                handlePositionSuccess,
+                handlePositionError,
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 1000,
+                    timeout: 15000
+                }
+            );
+        }
+
+        function stopRecording() {
+            if (gpsWatchId !== null) {
+                navigator.geolocation.clearWatch(gpsWatchId);
+                gpsWatchId = null;
+            }
+
+            if (isRecording) {
+                isRecording = false;
+
+                if (recordedLatLngs.length >= 2) {
+                    saveCurrentRecordToHistory();
+                    setStatus('Recording stopped and saved to history', 'good');
+                } else {
+                    setStatus('Recording stopped', 'warning');
+                }
+            }
+        }
+
+        function clearCurrentTrail() {
+            stopWatchOnly();
+
+            recordedLatLngs = [];
+            gpsTrail.setLatLngs([]);
+
+            updatePointCount();
+            updateAccuracy(null);
+            updateLastDistance(null);
+
+            if (locationMarker) {
+                map.removeLayer(locationMarker);
+                locationMarker = null;
+            }
+
+            if (accuracyCircle) {
+                map.removeLayer(accuracyCircle);
+                accuracyCircle = null;
+            }
+
+            setStatus('Current trail cleared', 'warning');
+        }
+
+        function stopWatchOnly() {
+            if (gpsWatchId !== null) {
+                navigator.geolocation.clearWatch(gpsWatchId);
+                gpsWatchId = null;
+            }
+            isRecording = false;
+        }
+
+        function handlePositionSuccess(position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const accuracy = position.coords.accuracy;
+            const currentLatLng = L.latLng(lat, lng);
+
+            updateAccuracy(accuracy);
+            updateLocationVisual(currentLatLng, accuracy);
+
+            if (accuracy > 25) {
+                setStatus(`Weak GPS signal (${accuracy.toFixed(1)}m)`, 'warning');
+                return;
+            }
+
+            let shouldAddPoint = false;
+            let distanceFromLast = null;
+
+            if (recordedLatLngs.length === 0) {
+                shouldAddPoint = true;
+            } else {
+                const lastLatLng = recordedLatLngs[recordedLatLngs.length - 1];
+                distanceFromLast = currentLatLng.distanceTo(lastLatLng);
+
+                if (distanceFromLast >= 1.5) {
+                    shouldAddPoint = true;
+                }
+            }
+
+            updateLastDistance(distanceFromLast);
+
+            if (shouldAddPoint) {
+                recordedLatLngs.push(currentLatLng);
+                gpsTrail.setLatLngs(recordedLatLngs);
+                updatePointCount();
+            }
+
+            map.panTo(currentLatLng);
+            setStatus('Recording...', 'good');
+        }
+
+        function handlePositionError(error) {
+            console.error('Geolocation error:', error);
+
+            let message = 'Unknown GPS error';
+
+            switch (error.code) {
+                case error.PERMISSION_DENIED:
+                    message = 'Location permission denied';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    message = 'Position unavailable';
+                    break;
+                case error.TIMEOUT:
+                    message = 'GPS request timeout';
+                    break;
+            }
+
+            setStatus(message, 'error');
+            alert(message);
+        }
+
+        function buildGeoJSONFromLatLngs(latlngs) {
+            return {
+                type: 'FeatureCollection',
+                features: [
+                    {
+                        type: 'Feature',
+                        properties: {
+                            name: 'Recorded GPS Trail',
+                            source: 'browser-geolocation'
+                        },
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: latlngs.map(latlng => [latlng.lng, latlng.lat])
+                        }
+                    }
+                ]
+            };
+        }
+
+        function downloadCurrentRecordedGeoJSON() {
+            if (recordedLatLngs.length < 2) {
+                alert('Need at least 2 GPS points before downloading.');
+                return;
+            }
+
+            const geojson = buildGeoJSONFromLatLngs(recordedLatLngs);
+            const filename = `recorded_gps_trail_${Date.now()}.geojson`;
+            downloadGeoJSONFile(geojson, filename);
+        }
+
+        function downloadGeoJSONFile(geojson, filename) {
+            const blob = new Blob([JSON.stringify(geojson, null, 2)], {
+                type: 'application/geo+json'
+            });
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function getHistoryRecords() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                return raw ? JSON.parse(raw) : [];
+            } catch (error) {
+                console.error('Error reading localStorage:', error);
+                return [];
+            }
+        }
+
+        function saveHistoryRecords(records) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+        }
+
+        function saveCurrentRecordToHistory() {
+            const records = getHistoryRecords();
+
+            const newRecord = {
+                id: `gps_${Date.now()}`,
+                name: `Walk Test ${records.length + 1}`,
+                createdAt: new Date().toISOString(),
+                pointsCount: recordedLatLngs.length,
+                geojson: buildGeoJSONFromLatLngs(recordedLatLngs)
+            };
+
+            records.unshift(newRecord);
+            saveHistoryRecords(records);
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const historyList = document.getElementById('historyList');
+            const records = getHistoryRecords();
+
+            if (!records.length) {
+                historyList.innerHTML = `<div class="history-empty">Wala pay saved records sa browser.</div>`;
+                return;
+            }
+
+            historyList.innerHTML = records.map(record => {
+                const created = new Date(record.createdAt);
+                const createdText = isNaN(created.getTime())
+                    ? record.createdAt
+                    : created.toLocaleString();
+
+                return `
+                    <div class="history-item">
+                        <div class="history-title">${escapeHtml(record.name || 'Untitled Record')}</div>
+                        <div class="history-meta">
+                            Date: ${escapeHtml(createdText)}<br>
+                            Points: ${record.pointsCount || 0}
+                        </div>
+                        <div class="history-actions">
+                            <button class="btn-secondary" onclick="previewHistoryRecord('${record.id}')">View</button>
+                            <button class="btn-secondary" onclick="zoomToHistoryRecord('${record.id}')">Zoom</button>
+                            <button class="btn-secondary" onclick="renameHistoryRecord('${record.id}')">Rename</button>
+                            <button class="btn-secondary" onclick="downloadHistoryRecord('${record.id}')">Download</button>
+                            <button class="btn-danger-small" onclick="deleteHistoryRecord('${record.id}')">Delete</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function previewHistoryRecord(recordId) {
+            const records = getHistoryRecords();
+            const record = records.find(item => item.id === recordId);
+
+            if (!record || !record.geojson) {
+                alert('Record not found.');
+                return;
+            }
+
+            clearHistoryPreview();
+
+            historyPreviewLayer = L.geoJSON(record.geojson, {
+                style: {
+                    color: 'orange',
+                    weight: 5,
+                    opacity: 0.95
+                }
+            }).addTo(map);
+
+            const bounds = historyPreviewLayer.getBounds();
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [30, 30] });
+            }
+
+            setStatus(`Viewing history: ${record.name}`, 'good');
+        }
+
+        function zoomToHistoryRecord(recordId) {
+            const records = getHistoryRecords();
+            const record = records.find(item => item.id === recordId);
+
+            if (!record || !record.geojson) {
+                alert('Record not found.');
+                return;
+            }
+
+            const tempLayer = L.geoJSON(record.geojson);
+            const bounds = tempLayer.getBounds();
+
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [30, 30] });
+            }
+        }
+
+        function clearHistoryPreview() {
+            if (historyPreviewLayer) {
+                map.removeLayer(historyPreviewLayer);
+                historyPreviewLayer = null;
+            }
+        }
+
+        function renameHistoryRecord(recordId) {
+            const records = getHistoryRecords();
+            const recordIndex = records.findIndex(item => item.id === recordId);
+
+            if (recordIndex === -1) {
+                alert('Record not found.');
+                return;
+            }
+
+            const currentName = records[recordIndex].name || '';
+            const newName = prompt('Enter new record name:', currentName);
+
+            if (newName === null) return;
+
+            const trimmed = newName.trim();
+            if (!trimmed) {
+                alert('Record name cannot be empty.');
+                return;
+            }
+
+            records[recordIndex].name = trimmed;
+            saveHistoryRecords(records);
+            renderHistory();
+
+            if (historyPreviewLayer) {
+                setStatus(`Renamed to: ${trimmed}`, 'good');
+            }
+        }
+
+        function downloadHistoryRecord(recordId) {
+            const records = getHistoryRecords();
+            const record = records.find(item => item.id === recordId);
+
+            if (!record || !record.geojson) {
+                alert('Record not found.');
+                return;
+            }
+
+            const safeName = (record.name || 'record')
+                .replace(/[^a-z0-9_\-]+/gi, '_')
+                .toLowerCase();
+
+            downloadGeoJSONFile(record.geojson, `${safeName}.geojson`);
+        }
+
+        function deleteHistoryRecord(recordId) {
+            const records = getHistoryRecords();
+            const record = records.find(item => item.id === recordId);
+
+            if (!record) {
+                alert('Record not found.');
+                return;
+            }
+
+            const confirmed = confirm(`Delete record "${record.name}"?`);
+            if (!confirmed) return;
+
+            const updatedRecords = records.filter(item => item.id !== recordId);
+            saveHistoryRecords(updatedRecords);
+            renderHistory();
+
+            setStatus(`Deleted: ${record.name}`, 'warning');
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        loadGeoJSON();
+        renderHistory();
+    </script>
+</body>
+</html>
